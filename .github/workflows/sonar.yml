@@ -1,0 +1,43 @@
+# 계산기 정적 분석 — SonarQube Cloud 로 C/C++ 코드 품질을 분석한다.
+# 준비: SonarQube Cloud 프로젝트 생성, Automatic Analysis 끄기, SONAR_TOKEN secret 등록 (GUIDE 7단계)
+name: SonarQube
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read       # PR 정보 읽기 (분석 결과를 PR 에 연결)
+
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BUILD_WRAPPER_OUT_DIR: bw-output   # Build Wrapper 가 compile_commands.json 을 만드는 곳
+
+    steps:
+      - name: 코드 가져오기 (전체 이력)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0    # 새 코드 판별을 위해 전체 이력을 받는다
+
+      - name: Build Wrapper 설치
+        uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v8
+
+      - name: Build Wrapper 로 빌드
+        run: |
+          cmake -S . -B build
+          build-wrapper-linux-x86-64 --out-dir "${{ env.BUILD_WRAPPER_OUT_DIR }}" cmake --build build
+
+      - name: SonarQube 분석
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            --define sonar.cfamily.compile-commands=${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json
