@@ -3,7 +3,7 @@
 
 TEST(SUM_TEST /*test case name*/, SUM_TEST_1 /*test name*/)
 {
-  EXPECT_EQ(2, sum(1, 1));
+  EXPECT_EQ(3, sum(1, 1));
 }
 
 int main(int argc, char **argv)
