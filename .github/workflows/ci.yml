@@ -1,17 +1,55 @@
+# 계산기 CI — 코드가 올라올 때마다 CMake 로 빌드하고 googletest 단위 테스트를 자동으로 실행한다.
 name: CI
+
 on:
   push:
-    branches: [main]
+    branches: [main]        # main 에 push 될 때 (PR 을 합칠 때 포함)
   pull_request:
-    branches: [main]
+    branches: [main]        # main 으로 향하는 PR 이 열리거나 새 커밋이 올라올 때
+  workflow_dispatch:        # Actions 탭에서 손으로 실행할 때
+
+permissions:
+  contents: read            # 코드 읽기 권한만 준다 (최소 권한)
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true  # 같은 브랜치에 새 커밋이 오면 이전 실행은 취소
+
 jobs:
-  build-test:
+  build-test:               # 잡 이름 = PR 필수 상태 검사 이름 (바꾸면 브랜치 규칙도 바꾼다)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v7
+      - name: 코드 가져오기
+        uses: actions/checkout@v7
+
+      - name: 도구 버전 확인
+        run: |
+          cmake --version
+          g++ --version
+
       - name: Configure
         run: cmake -S . -B build
+
       - name: Build
         run: cmake --build build
+
       - name: Test
-        run: ./build/testRunner
+        run: ./build/testRunner --gtest_output=xml:test-results.xml
+
+      - name: 결과 요약
+        if: always()
+        run: |
+          total=$(grep -c '<testcase' test-results.xml || true)
+          failed=$(grep -c '<failure' test-results.xml || true)
+          echo "### 테스트 ${total:-0}개, 실패 ${failed:-0}개" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 테스트 결과 파일 올리기
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: test-results.xml
+          retention-days: 7
+          if-no-files-found: ignore
